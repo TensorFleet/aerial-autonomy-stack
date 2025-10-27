@@ -1,13 +1,13 @@
 ################################################################################
 # Stage 1 - 8GB ################################################################
 ################################################################################
-FROM nvcr.io/nvidia/cuda:12.8.1-cudnn-runtime-ubuntu24.04 AS ros2-image
+FROM nvcr.io/nvidia/cuda:12.8.1-cudnn-runtime-ubuntu22.04 AS ros2-image
 
 # Tell apt (and other Debian tools) not to prompt for user input during package installs
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Update the package list and install basic dependencies
-RUN apt update --allow-releaseinfo-change || (sleep 30 && apt update --allow-releaseinfo-change) \
+RUN apt update \
     && apt install -y --no-install-recommends \
         wget gosu htop vim ruby tmux net-tools iproute2 iputils-ping \
         python3-pip python3-venv \
@@ -16,9 +16,9 @@ RUN apt update --allow-releaseinfo-change || (sleep 30 && apt update --allow-rel
     && apt clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Install ROS2 Jazzy
-# Based on https://docs.ros.org/en/jazzy/Installation/Ubuntu-Install-Debs.html
-RUN apt update --allow-releaseinfo-change || (sleep 30 && apt update --allow-releaseinfo-change) \
+# Install ROS2 Humble
+# Based on https://docs.ros.org/en/humble/Installation/Ubuntu-Install-Debs.html
+RUN apt update \
     && apt install -y --no-install-recommends \
         locales \
     && apt clean \
@@ -26,7 +26,7 @@ RUN apt update --allow-releaseinfo-change || (sleep 30 && apt update --allow-rel
 RUN locale-gen en_US en_US.UTF-8
 RUN update-locale LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8
 ENV LANG=en_US.UTF-8
-RUN apt update --allow-releaseinfo-change || (sleep 30 && apt update --allow-releaseinfo-change) \
+RUN apt update \
     && apt install -y --no-install-recommends \
         software-properties-common curl \
     && apt clean \
@@ -34,14 +34,14 @@ RUN apt update --allow-releaseinfo-change || (sleep 30 && apt update --allow-rel
 RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg
 RUN echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu \
     $(. /etc/os-release && echo $UBUNTU_CODENAME) main" | tee /etc/apt/sources.list.d/ros2.list > /dev/null
-RUN apt update --allow-releaseinfo-change || (sleep 30 && apt update --allow-releaseinfo-change) \
+RUN apt update \
     && apt install -y --no-install-recommends \
-        ros-jazzy-desktop ros-dev-tools \
-        ros-jazzy-bondcpp ros-jazzy-ament-cmake-clang-format \
-        ros-jazzy-vision-msgs \
+        ros-humble-desktop ros-dev-tools \
+        ros-humble-bondcpp ros-humble-ament-cmake-clang-format \
+        ros-humble-vision-msgs \
     && apt clean \
     && rm -rf /var/lib/apt/lists/*
-RUN echo "source /opt/ros/jazzy/setup.bash" >> /root/.bashrc
+RUN echo "source /opt/ros/humble/setup.bash" >> /root/.bashrc
 RUN rosdep init
 
 ################################################################################
@@ -51,16 +51,16 @@ FROM ros2-image AS ros2-gz-qgc-image
 
 # Gazebo Harmonic
 # Based on https://gazebosim.org/docs/harmonic/install_ubuntu/
-RUN apt update --allow-releaseinfo-change || (sleep 30 && apt update --allow-releaseinfo-change) \
+RUN apt update \
     && apt install -y --no-install-recommends \
         lsb-release gnupg \
     && apt clean \
     && rm -rf /var/lib/apt/lists/*
 RUN curl https://packages.osrfoundation.org/gazebo.gpg --output /usr/share/keyrings/pkgs-osrf-archive-keyring.gpg
 RUN echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/pkgs-osrf-archive-keyring.gpg] http://packages.osrfoundation.org/gazebo/ubuntu-stable $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/gazebo-stable.list > /dev/null
-RUN apt update --allow-releaseinfo-change || (sleep 30 && apt update --allow-releaseinfo-change) \
+RUN apt update \
     && apt install -y --no-install-recommends \
-        gz-harmonic ros-jazzy-ros-gz \
+        gz-harmonic ros-humble-ros-gzharmonic \
         libgz-transport13-* python3-gz-transport13 python3-gz-msgs10 \
     && apt clean \
     && rm -rf /var/lib/apt/lists/*
@@ -72,7 +72,7 @@ WORKDIR /
 RUN useradd -m -s /bin/bash qgcuser
 RUN usermod -aG dialout qgcuser
 # RUN apt-get remove modemmanager -y
-RUN apt update --allow-releaseinfo-change || (sleep 30 && apt update --allow-releaseinfo-change) \
+RUN apt update \
     && apt install -y --no-install-recommends \
         gstreamer1.0-plugins-bad gstreamer1.0-libav gstreamer1.0-gl \
         libfuse2 \
@@ -118,13 +118,14 @@ RUN chown -R root:root /git/ardupilot
 # Based on https://ardupilot.org/dev/docs/sitl-with-gazebo.html
 COPY /github_clones/ardupilot_gazebo /git/ardupilot_gazebo
 WORKDIR /git/ardupilot_gazebo
-RUN apt update --allow-releaseinfo-change || (sleep 30 && apt update --allow-releaseinfo-change) \
+RUN apt update \
     && apt install -y --no-install-recommends \
         rapidjson-dev \
         libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
     && apt clean \
     && rm -rf /var/lib/apt/lists/*
-RUN pip3 install --no-cache-dir "numpy<2" mavproxy --break-system-packages
+RUN pip3 install --no-cache-dir --upgrade pip \
+    && pip3 install --no-cache-dir --resume-retries 5 "numpy<2" mavproxy
 ENV GZ_VERSION=harmonic
 RUN mkdir build && cd build && \
     cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo && \
@@ -133,7 +134,7 @@ RUN mkdir build && cd build && \
 ################################################################################
 # Temporary stage to filter airframes ##########################################
 ################################################################################
-FROM ubuntu:24.04 AS airframe_filter_stage
+FROM ubuntu:22.04 AS airframe_filter_stage
 COPY simulation/simulation_resources/aircraft_models/ /temp_folder
 RUN mkdir /airframes
 RUN find /temp_folder -type f -regex '.*/[0-9]+_.*' -exec cp {} /airframes/ \;
@@ -170,7 +171,7 @@ RUN make px4_sitl
 FROM ros2-gz-qgc-px4custom-ardupilot-image AS ros2-gz-qgc-px4custom-ardupilot-gst-pymavlink-zenoh-image
 
 # Add GStreamer packages to stream the cameras to the aircraft containers
-RUN apt update --allow-releaseinfo-change || (sleep 30 && apt update --allow-releaseinfo-change) \
+RUN apt update \
     && apt install -y --no-install-recommends \
         gstreamer1.0-tools gstreamer1.0-plugins-good gstreamer1.0-plugins-ugly gstreamer1.0-libav \
         python3-gi gir1.2-gst-plugins-base-1.0 gir1.2-gstreamer-1.0 \
@@ -178,12 +179,13 @@ RUN apt update --allow-releaseinfo-change || (sleep 30 && apt update --allow-rel
     && rm -rf /var/lib/apt/lists/*
 
 # Add pymavlink to emulate the ground system using telemetry data
-RUN pip3 install --no-cache-dir pymavlink --break-system-packages
+RUN pip3 install --no-cache-dir --upgrade pip \
+    && pip3 install --no-cache-dir --resume-retries 5 pymavlink
 # Check with $ python3 -c "import pymavlink; print(pymavlink.__version__)"
 
 # Install Zenoh
 RUN echo "deb [trusted=yes] https://download.eclipse.org/zenoh/debian-repo/ /" | sudo tee -a /etc/apt/sources.list > /dev/null
-RUN apt-get update --allow-releaseinfo-change || (sleep 30 && apt-get update --allow-releaseinfo-change) && \
+RUN apt-get update && \
     apt-get install -y zenoh-bridge-ros2dds \
     && apt clean \
     && rm -rf /var/lib/apt/lists/*
@@ -194,14 +196,16 @@ RUN apt-get update --allow-releaseinfo-change || (sleep 30 && apt-get update --a
 FROM ros2-gz-qgc-px4custom-ardupilot-gst-pymavlink-zenoh-image AS simulation-dev-image
 
 # Install wmctrl and xrandr to resize Gazebo and QGC GUIs
-RUN apt update --allow-releaseinfo-change || (sleep 30 && apt update --allow-releaseinfo-change) \
+RUN apt update \
     && apt install -y --no-install-recommends \
-        wmctrl x11-xserver-utils \
+        wmctrl \
+        x11-xserver-utils \
+        ros-humble-rosbridge-suite \
     && apt clean \
     && rm -rf /var/lib/apt/lists/*
 
 # Install https://github.com/PX4/flight_review
-RUN apt-get update --allow-releaseinfo-change || (sleep 30 && apt-get update --allow-releaseinfo-change) && \
+RUN apt-get update && \
     apt-get install -y sqlite3 libfftw3-bin libfftw3-dev \
     && apt clean \
     && rm -rf /var/lib/apt/lists/*
@@ -209,23 +213,23 @@ COPY /github_clones/flight_review /git/flight_review
 WORKDIR /git/flight_review/app
 RUN python3 -m venv /px4rf-env
 RUN /px4rf-env/bin/pip3 install --no-cache-dir --upgrade pip && \
-    /px4rf-env/bin/pip3 install --no-cache-dir -r requirements.txt
+    /px4rf-env/bin/pip3 install --no-cache-dir --resume-retries 5 -r requirements.txt
 
 # Build the ROS 2 workspace for external packages
 RUN mkdir -p /ros2_ws_github/src
 WORKDIR /ros2_ws_github
 RUN rosdep update
-RUN rosdep install --from-paths src/ --ignore-src --rosdistro jazzy -y
+RUN rosdep install --from-paths src/ --ignore-src --rosdistro humble -y
 # Explicitly use bash, not sh, to source and build the workspace
-RUN bash -c "source /opt/ros/jazzy/setup.bash && colcon build --symlink-install"
+RUN bash -c "source /opt/ros/humble/setup.bash && colcon build --symlink-install"
 
 # Build the ROS 2 workspace
 COPY simulation/simulation_ws/src /ros2_ws/src
 WORKDIR /ros2_ws
 RUN rosdep update
-RUN rosdep install --from-paths src/ --ignore-src --rosdistro jazzy -y
+RUN rosdep install --from-paths src/ --ignore-src --rosdistro humble -y
 # Explicitly use bash, not sh, to source and build the workspace
-RUN bash -c "source /opt/ros/jazzy/setup.bash && source /ros2_ws_github/install/setup.bash && colcon build --symlink-install"
+RUN bash -c "source /opt/ros/humble/setup.bash && source /ros2_ws_github/install/setup.bash && colcon build --symlink-install"
 
 # Copy resources and configuration files from this repository
 COPY simulation/simulation_resources/ /simulation_resources
@@ -236,7 +240,7 @@ RUN chmod +x /simulation_resources/simulation_worlds/_create_ardupilot_world.sh
 # Source the workspaces
 RUN echo "source /ros2_ws_github/install/setup.bash" >> /root/.bashrc
 RUN echo "source /ros2_ws/install/setup.bash" >> /root/.bashrc
-# If needed (but already in .bashrc) $ source /opt/ros/jazzy/setup.bash && source /ros2_ws_github/install/setup.bash && source /ros2_ws/install/setup.bash
+# If needed (but already in .bashrc) $ source /opt/ros/humble/setup.bash && source /ros2_ws_github/install/setup.bash && source /ros2_ws/install/setup.bash
 
 # Final config
 WORKDIR /
