@@ -107,6 +107,31 @@ docker exec simulation-container bash -c " \
   -p 'enable_wind: false'" # Disable WindEffects
 ```
 
+### Visualization with Lichtblick
+
+- `sim_run.sh` now launches [Lichtblick](https://github.com/lichtblick-suite/lichtblick) in a lightweight container (override the port with `LICHTBLICK_PORT`, defaults to `8080`) whenever `HEADLESS=false`. Open http://localhost:8080 after the stack boots.
+- Each aircraft container starts a `rosbridge_websocket` server and maps it to the host at `ws://localhost:9090`, `9091`, … (`9090 + DRONE_ID - 1`). You can also reach the containers directly on the Docker network at `ws://42.42.1.<DRONE_ID>:9090 + DRONE_ID - 1`.
+- Camera video streams are sent via GStreamer on unique ports per drone: `5600`, `5601`, … (`5600 + DRONE_ID - 1`).
+
+**Setup for Multiple Drones:**
+1. **Add Data Sources**: In Lichtblick, click "Open connection" (top-left) and add a "Rosbridge (ROS 1 & 2)" connection for each drone:
+   - Drone 1: `ws://localhost:9090`
+   - Drone 2: `ws://localhost:9091`
+   - Drone N: `ws://localhost:909X` where X = N-1
+2. **Import Layout**: Go to "Layout" → "Import from file" and select `supplementary/lichtblick/aerial_autonomy.layout.json`
+3. **Assign Connections**: For each panel (3D, Image, Teleop), click the panel's settings (⚙️) and select the appropriate data source:
+   - Drone 1 panels → "ws://localhost:9090" connection
+   - Drone 2 panels → "ws://localhost:9091" connection
+
+The pre-built layout includes:
+  - Two `3D` panels (`3D!drone1_lidar`, `3D!drone2_lidar`) pointed at `/Drone1/lidar_points` and `/Drone2/lidar_points` (fallback to `/lidar_points` if you only have a single shared cloud). They follow `/Drone{N}/base_link`; tweak the frame or topic in panel settings if your TF tree differs.
+  - Two `Image` panels for `/Drone1/detections/image` and `/Drone2/detections/image` so you can compare YOLO overlays side-by-side. Add markers in the panel settings if you publish detection metadata separately.
+  - Four `Teleop` panels for both PX4 and ArduPilot. The layout defaults to PX4 panels (`Teleop!drone1_px4`, `Teleop!drone2_px4`) targeting `/Drone{N}/setpoint_velocity/cmd_vel_unstamped`. For ArduPilot, swap in the ArduPilot panels (`Teleop!drone1_ardupilot`, `Teleop!drone2_ardupilot`) which target `/Drone{N}/mavros/setpoint_velocity/cmd_vel_unstamped`. Up/Down drive forward/backward (`linear-x`), Left/Right command yaw (`angular-z`). Adjust the axes/rates in the settings drawer if you prefer lateral or vertical control instead.
+- Both autopilots consume `geometry_msgs/Twist` commands. For **PX4**, velocities are converted from body frame to NED frame and published as `TrajectorySetpoint` messages (offboard mode flag 7 required). For **ArduPilot** (MAVROS), the commands are in LOCAL_NED frame: +X is North (forward), +Y is East (right), +Z is Down. Start with the default 0.8 m/s and 0.5 rad/s limits and verify in simulation before increasing them. After releasing the D-pad the panel stops publishing; if the vehicle keeps moving, explicitly tap the opposite direction to zero it.
+- **Important for teleop**: For PX4, you must first enter offboard mode with flag 7 (e.g., by calling the offboard action). For ArduPilot, the vehicle should be in GUIDED mode for velocity commands to take effect.
+- For fleets larger than two, duplicate the relevant panels (right-click → Duplicate) and retarget the topics to `/Drone3/...`, `/Drone4/...`, etc. Likewise, set the 3D follow frame to the vehicle you care about.
+- All visualizations previously rendered in native windows (YOLO overlays, KISS-ICP viewer) are now published exclusively to Lichtblick-friendly topics, so keeping the browser tab open is enough to monitor cameras, detections, and LiDAR across drones. Set `HEADLESS=true` if you need a fully headless deployment and prefer to start Lichtblick manually.
+
 ### Fly a Mission
 
 ```sh
