@@ -43,22 +43,27 @@ windows:
           <% if simulated_time == 'true' %>
           sudo sed -i '0,/ros__parameters:/s/ros__parameters:/ros__parameters:\n    use_sim_time: true/' /opt/ros/humble/share/mavros/launch/apm_config.yaml && 
           <% end %>
-          ros2 launch mavros apm.launch fcu_url:=udp://0.0.0.0:<%= 22530 + drone_id - 1 %>@<%= 22530 + drone_id - 1 %> tgt_system:=<%= drone_id %>
+          ROS_NAMESPACE=/Drone<%= drone_id %> ros2 launch mavros apm.launch fcu_url:=udp://0.0.0.0:<%= 22530 + drone_id - 1 %>@<%= 22530 + drone_id - 1 %> tgt_system:=<%= drone_id %>
   <% end %>
 
   <% if camera == 'true' %>
   - yolo:
       layout: even-horizontal
       panes:
-        - ros2 run yolo_inference yolo_inference <% if headless == 'true' %> --headless<% end %> <% if simulated_time == 'true' %> --ros-args -p use_sim_time:=True<% end %>
+        - ros2 run yolo_inference yolo_inference <% if headless == 'true' %> --headless<% end %> --ros-args -r __ns:=/Drone<%= drone_id %> <% if simulated_time == 'true' %> -p use_sim_time:=True<% end %>
   <% end %>
 
   <% if lidar == 'true' %>
   - kiss-icp:
       layout: even-horizontal
       panes:
-        - ros2 launch kiss_icp odometry.launch.py topic:=/lidar_points <% if headless == 'true' %> visualize:=false<% end %>
+        - ros2 launch kiss_icp odometry.launch.py topic:=/Drone<%= drone_id %>/lidar_points visualize:=false
   <% end %>
+
+  - rosbridge:
+      layout: tiled
+      panes:
+        - ros2 launch rosbridge_server rosbridge_websocket_launch.xml port:=<%= 9090 + drone_id - 1 %> address:=0.0.0.0
 
   - state_sharing_over_zenoh:
       layout: even-vertical
