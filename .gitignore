@@ -1,5 +1,13 @@
 /github_clones/
 
+### ROS2 build artifacts and logs
+install/
+log/
+build/
+
+### YOLO model artifacts (downloaded at runtime)
+scripts/yolo_artifacts/
+
 ### C++ .gitignore
 
 # Prerequisites
