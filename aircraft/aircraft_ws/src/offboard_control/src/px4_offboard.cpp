@@ -74,7 +74,7 @@ PX4Offboard::PX4Offboard() : Node("px4_offboard"),
 
     // Offboard flag subscriber
     offboard_flag_sub_ = this->create_subscription<autopilot_interface_msgs::msg::OffboardFlag>(
-        "/offboard_flag", qos_profile_sub, // 10Hz
+        "offboard_flag", qos_profile_sub, // 10Hz
         std::bind(&PX4Offboard::offboard_flag_callaback, this, std::placeholders::_1), subscriber_options);
 
     // Perception subscribers
@@ -87,6 +87,15 @@ PX4Offboard::PX4Offboard() : Node("px4_offboard"),
     kiss_odometry_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
         "/kiss/odometry", qos_profile_sub, // 10Hz
         std::bind(&PX4Offboard::kiss_odometry_callback, this, std::placeholders::_1), subscriber_options);
+    
+    // Teleop subscriber
+    cmd_vel_unstamped_sub_ = this->create_subscription<geometry_msgs::msg::Twist>(
+        "setpoint_velocity/cmd_vel_unstamped", qos_profile_sub, // Variable rate from Lichtblick
+        std::bind(&PX4Offboard::cmd_vel_unstamped_callback, this, std::placeholders::_1), subscriber_options);
+    
+    // Initialize teleop variables
+    teleop_cmd_vel_ = nullptr;
+    last_teleop_cmd_time_ = this->get_clock()->now();
 }
 
 // Callbacks for subscribers (reentrant group)
@@ -207,6 +216,13 @@ void PX4Offboard::kiss_odometry_callback(const nav_msgs::msg::Odometry::SharedPt
     kiss_q_[1] = msg->pose.pose.orientation.x;
     kiss_q_[2] = msg->pose.pose.orientation.y;
     kiss_q_[3] = msg->pose.pose.orientation.z;
+}
+
+void PX4Offboard::cmd_vel_unstamped_callback(const geometry_msgs::msg::Twist::SharedPtr msg)
+{
+    std::unique_lock<std::shared_mutex> lock(node_data_mutex_); // Use unique_lock for data writes
+    teleop_cmd_vel_ = msg;
+    last_teleop_cmd_time_ = this->get_clock()->now();
 }
 
 // Callbacks for timers (reentrant group)
@@ -336,6 +352,37 @@ void PX4Offboard::offboard_loop_callback()
         trajectory_ref.timestamp = current_time_us;
         offboard_mode.velocity = true;
         trajectory_ref.velocity = {20.0, 0.0, 0.0};
+        trajectory_ref_pub_->publish(trajectory_ref);
+    } else if (offboard_flag_ == 7) { // Teleop velocity reference from Lichtblick
+        TrajectorySetpoint trajectory_ref; // https://github.com/PX4/px4_msgs/blob/release/1.16/msg/TrajectorySetpoint.msg
+        trajectory_ref.timestamp = current_time_us;
+        offboard_mode.velocity = true;
+        // Check if we have recent teleop commands (within 500ms)
+        auto now = this->get_clock()->now();
+        double time_since_last_cmd = (now - last_teleop_cmd_time_).seconds();
+        if (teleop_cmd_vel_ != nullptr && time_since_last_cmd < 0.5) {
+            // Convert from body frame (Twist in NED) to PX4's NED frame
+            // Twist convention: linear.x is forward, linear.y is right, linear.z is down
+            // angular.z is yaw rate (positive = right turn)
+            // PX4 TrajectorySetpoint velocity in NED: [North, East, Down]
+            // For body-frame control, we need to rotate by current heading
+            // Note: heading_ is already in radians (-PI to +PI)
+            double cos_h = std::cos(heading_);
+            double sin_h = std::sin(heading_);
+            // Rotate body velocities to NED frame
+            float vx_body = teleop_cmd_vel_->linear.x;  // Forward
+            float vy_body = teleop_cmd_vel_->linear.y;  // Right
+            float vz_body = teleop_cmd_vel_->linear.z;  // Down
+            float vel_north = vx_body * cos_h - vy_body * sin_h;
+            float vel_east = vx_body * sin_h + vy_body * cos_h;
+            float vel_down = vz_body;
+            trajectory_ref.velocity = {vel_north, vel_east, vel_down};
+            trajectory_ref.yawspeed = teleop_cmd_vel_->angular.z; // Yaw rate
+        } else {
+            // No recent commands - hover in place
+            trajectory_ref.velocity = {0.0, 0.0, 0.0};
+            trajectory_ref.yawspeed = 0.0;
+        }
         trajectory_ref_pub_->publish(trajectory_ref);
     } else {
         RCLCPP_WARN(get_logger(), "Unexpected offboard_flag value: %d", offboard_flag_.load());

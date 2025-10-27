@@ -24,6 +24,7 @@
 #include <GeographicLib/LocalCartesian.hpp>
 
 #include "geometry_msgs/msg/vector3.hpp"
+#include "geometry_msgs/msg/twist.hpp"
 
 #include <px4_msgs/msg/vehicle_global_position.hpp>
 #include <px4_msgs/msg/vehicle_local_position.hpp>
@@ -83,6 +84,9 @@ private:
     rclcpp::Subscription<vision_msgs::msg::Detection2DArray>::SharedPtr yolo_detections_sub_;
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr kiss_odometry_sub_;
 
+    // Teleop subscriber
+    rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_unstamped_sub_;
+
     // Subscribers variables
     double lat_, lon_, alt_, alt_ellipsoid_;
     bool xy_valid_, z_valid_, v_xy_valid_, v_z_valid_, xy_global_, z_global_;
@@ -101,6 +105,10 @@ private:
 
     // Guidance variables
     double traj_ref_east, traj_ref_north, traj_ref_up;
+    
+    // Teleop variables
+    geometry_msgs::msg::Twist::SharedPtr teleop_cmd_vel_;
+    rclcpp::Time last_teleop_cmd_time_;
 
     // PX4 publishers
     rclcpp::Publisher<OffboardControlMode>::SharedPtr offboard_mode_pub_;
@@ -125,6 +133,9 @@ private:
     void ground_tracks_callback(const ground_system_msgs::msg::SwarmObs::SharedPtr msg);
     void yolo_detections_callback(const vision_msgs::msg::Detection2DArray::SharedPtr msg);
     void kiss_odometry_callback(const nav_msgs::msg::Odometry::SharedPtr msg);
+    
+    // Callback for teleop subscriber
+    void cmd_vel_unstamped_callback(const geometry_msgs::msg::Twist::SharedPtr msg);
 };
 
 #endif // OFFBOARD_CONTROL__PX4_OFFBOARD_HPP_

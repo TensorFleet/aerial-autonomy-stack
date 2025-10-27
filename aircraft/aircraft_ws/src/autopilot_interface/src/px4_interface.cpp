@@ -33,7 +33,7 @@ PX4Interface::PX4Interface() : Node("px4_interface"),
     command_pub_ = this->create_publisher<VehicleCommand>("fmu/in/vehicle_command", qos_profile_pub);
 
     // Offboard flag publisher
-    offboard_flag_pub_ = this->create_publisher<autopilot_interface_msgs::msg::OffboardFlag>("/offboard_flag", qos_profile_pub);
+    offboard_flag_pub_ = this->create_publisher<autopilot_interface_msgs::msg::OffboardFlag>("offboard_flag", qos_profile_pub);
 
     // Create callback groups (Reentrant or MutuallyExclusive)
     callback_group_timer_ = this->create_callback_group(rclcpp::CallbackGroupType::Reentrant); // Timed callbacks in parallel
