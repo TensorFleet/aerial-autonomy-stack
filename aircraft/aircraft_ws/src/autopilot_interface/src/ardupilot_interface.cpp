@@ -28,10 +28,10 @@ ArdupilotInterface::ArdupilotInterface() : Node("ardupilot_interface"),
     // MAVROS Publishers
     rclcpp::QoS qos_profile_pub(10);  // Depth of 10
     qos_profile_pub.durability(rclcpp::DurabilityPolicy::TransientLocal);  // Or rclcpp::DurabilityPolicy::Volatile
-    setpoint_pos_pub_= this->create_publisher<GeoPoseStamped>("/mavros/setpoint_position/global", qos_profile_pub);
+    setpoint_pos_pub_= this->create_publisher<GeoPoseStamped>("mavros/setpoint_position/global", qos_profile_pub);
 
     // Offboard flag publisher
-    offboard_flag_pub_ = this->create_publisher<autopilot_interface_msgs::msg::OffboardFlag>("/offboard_flag", qos_profile_pub);
+    offboard_flag_pub_ = this->create_publisher<autopilot_interface_msgs::msg::OffboardFlag>("offboard_flag", qos_profile_pub);
 
     // Create callback groups (Reentrant or MutuallyExclusive)
     callback_group_timer_ = this->create_callback_group(rclcpp::CallbackGroupType::Reentrant); // Timed callbacks in parallel
@@ -60,34 +60,34 @@ ArdupilotInterface::ArdupilotInterface() : Node("ardupilot_interface"),
 
     // MAVROS subscribers
     mavros_global_position_global_sub_= this->create_subscription<NavSatFix>(
-        "/mavros/global_position/global", qos_profile_sub, // 4Hz
+        "mavros/global_position/global", qos_profile_sub, // 4Hz
         std::bind(&ArdupilotInterface::global_position_global_sub_callback, this, std::placeholders::_1), subscriber_options);
     mavros_local_position_odom_sub_= this->create_subscription<Odometry>(
-        "/mavros/local_position/odom", qos_profile_sub, // 4Hz
+        "mavros/local_position/odom", qos_profile_sub, // 4Hz
         std::bind(&ArdupilotInterface::local_position_odom_callback, this, std::placeholders::_1), subscriber_options);
     mavros_global_position_local_sub_ = this->create_subscription<Odometry>(
-        "/mavros/global_position/local", qos_profile_sub, // 4Hz
+        "mavros/global_position/local", qos_profile_sub, // 4Hz
         std::bind(&ArdupilotInterface::global_position_local_callback, this, std::placeholders::_1), subscriber_options);
     mavros_vfr_hud_sub_ = this->create_subscription<VfrHud>(
-        "/mavros/vfr_hud", qos_profile_sub, // 4Hz
+        "mavros/vfr_hud", qos_profile_sub, // 4Hz
         std::bind(&ArdupilotInterface::vfr_hud_callback, this, std::placeholders::_1), subscriber_options);
     mavros_home_position_home_sub_ = this->create_subscription<HomePosition>(
-        "/mavros/home_position/home", qos_profile_sub, // 1Hz
+        "mavros/home_position/home", qos_profile_sub, // 1Hz
         std::bind(&ArdupilotInterface::home_position_home_callback, this, std::placeholders::_1), subscriber_options);
     mavros_state_sub_ = this->create_subscription<State>(
-        "/mavros/state", qos_profile_sub, //1Hz
+        "mavros/state", qos_profile_sub, //1Hz
         std::bind(&ArdupilotInterface::state_callback, this, std::placeholders::_1), subscriber_options);
 
     // MAVROS service clients
-    vehicle_info_client_ = this->create_client<VehicleInfoGet>("/mavros/vehicle_info_get");
-    arming_client_ = this->create_client<CommandBool>("/mavros/cmd/arming");
-    command_long_client_ = this->create_client<CommandLong>("/mavros/cmd/command");
-    takeoff_client_ = this->create_client<CommandTOL>("/mavros/cmd/takeoff");
-    landing_client_ = this->create_client<CommandTOL>("/mavros/cmd/land");
-    set_param_client_ = this->create_client<ParamSetV2>("/mavros/param/set");
-    set_mode_client_ = this->create_client<SetMode>("/mavros/set_mode");
-    wp_push_client_ = this->create_client<WaypointPush>("/mavros/mission/push");
-    set_wp_client_ = this->create_client<WaypointSetCurrent>("/mavros/mission/set_current");
+    vehicle_info_client_ = this->create_client<VehicleInfoGet>("mavros/vehicle_info_get");
+    arming_client_ = this->create_client<CommandBool>("mavros/cmd/arming");
+    command_long_client_ = this->create_client<CommandLong>("mavros/cmd/command");
+    takeoff_client_ = this->create_client<CommandTOL>("mavros/cmd/takeoff");
+    landing_client_ = this->create_client<CommandTOL>("mavros/cmd/land");
+    set_param_client_ = this->create_client<ParamSetV2>("mavros/param/set");
+    set_mode_client_ = this->create_client<SetMode>("mavros/set_mode");
+    wp_push_client_ = this->create_client<WaypointPush>("mavros/mission/push");
+    set_wp_client_ = this->create_client<WaypointSetCurrent>("mavros/mission/set_current");
 
     // Services
     set_speed_service_ = this->create_service<autopilot_interface_msgs::srv::SetSpeed>(
