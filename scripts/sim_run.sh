@@ -26,15 +26,19 @@ echo "Desktop environment: $DESK_ENV"
 
 # Cleanup function
 cleanup() {
-  DOCKER_PIDS=$(pgrep -f "docker run.*simulation-image|docker run.*aircraft-image" 2>/dev/null || true)
+  DOCKER_PIDS=$(pgrep -f "docker run.*simulation-image|docker run.*aircraft-image|docker run.*lichtblick" 2>/dev/null || true)
   SIMULATION_CONTAINERS=$(docker ps -a -q --filter name=simulation-container 2>/dev/null || true)
   AIRCRAFT_CONTAINERS=$(docker ps -a -q --filter name=aircraft-container 2>/dev/null || true)
+  LICHTBLICK_CONTAINERS=$(docker ps -a -q --filter name=lichtblick-container 2>/dev/null || true)
   echo "Stopping Docker containers (this will take a few seconds)..."
   if [ -n "$SIMULATION_CONTAINERS" ]; then
     docker stop $SIMULATION_CONTAINERS
   fi
   if [ -n "$AIRCRAFT_CONTAINERS" ]; then
     docker stop $AIRCRAFT_CONTAINERS
+  fi
+  if [ -n "$LICHTBLICK_CONTAINERS" ]; then
+    docker stop $LICHTBLICK_CONTAINERS
   fi
   docker network rm aas-network 2>/dev/null && echo "Removed aas-network" || echo "Network aas-network not found or already removed"
   if [ -n "$DOCKER_PIDS" ]; then
@@ -147,6 +151,7 @@ xterm "${XTERM_CONFIG_ARGS[@]}" -title "Simulation" -fa Monospace -fs $FONT_SIZE
 # Launch the quad containers
 for i in $(seq 1 $NUM_QUADS); do
   DRONE_ID=$((DRONE_ID + 1))
+  ROSBRIDGE_PORT=$((9090 + DRONE_ID - 1))
   sleep 1.5 # Limit resource usage
   DOCKER_CMD="docker run -it --rm \
     --volume /tmp/.X11-unix:/tmp/.X11-unix:rw --device /dev/dri --gpus all \
@@ -157,6 +162,7 @@ for i in $(seq 1 $NUM_QUADS); do
     --env SIMULATED_TIME=true \
     --net=aas-network --ip=42.42.1.$DRONE_ID \
     --privileged \
+    -p ${ROSBRIDGE_PORT}:9090 \
     --name aircraft-container_$DRONE_ID"
   # Add WSL-specific options and complete the command
   if [[ "$DESK_ENV" == "wsl" ]]; then
@@ -170,6 +176,7 @@ done
 # Launch the vtol containers
 for i in $(seq 1 $NUM_VTOLS); do
   DRONE_ID=$((DRONE_ID + 1))
+  ROSBRIDGE_PORT=$((9090 + DRONE_ID - 1))
   sleep 1.5 # Limit resource usage
   DOCKER_CMD="docker run -it --rm \
     --volume /tmp/.X11-unix:/tmp/.X11-unix:rw --device /dev/dri --gpus all \
@@ -180,6 +187,7 @@ for i in $(seq 1 $NUM_VTOLS); do
     --env SIMULATED_TIME=true \
     --net=aas-network --ip=42.42.1.$DRONE_ID \
     --privileged \
+    -p ${ROSBRIDGE_PORT}:9090 \
     --name aircraft-container_$DRONE_ID"
   # Add WSL-specific options and complete the command
   if [[ "$DESK_ENV" == "wsl" ]]; then
@@ -189,6 +197,19 @@ for i in $(seq 1 $NUM_VTOLS); do
   calculate_terminal_position $DRONE_ID
   xterm "${XTERM_CONFIG_ARGS[@]}" -title "VTOL $DRONE_ID" -fa Monospace -fs $FONT_SIZE -bg black -fg white -geometry "${TERM_COLS}x${TERM_ROWS}+${X_POS}+${Y_POS}" -hold -e bash -c "$DOCKER_CMD" &
 done
+
+if [[ "$HEADLESS" != "true" ]]; then
+  LICHTBLICK_PORT="${LICHTBLICK_PORT:-8080}"
+  if ! docker ps --format '{{.Names}}' | grep -q '^lichtblick-container$'; then
+    echo "Starting Lichtblick visualization on http://localhost:${LICHTBLICK_PORT}"
+    docker run --rm -d \
+      -p "${LICHTBLICK_PORT}:8080" \
+      --name lichtblick-container \
+      ghcr.io/lichtblick-suite/lichtblick:latest >/dev/null
+  else
+    echo "Lichtblick visualization container already running."
+  fi
+fi
 
 echo "Fly, my pretties, fly!"
 echo "Press any key to stop all containers and close the terminals..."

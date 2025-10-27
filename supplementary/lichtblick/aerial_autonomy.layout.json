@@ -1,0 +1,299 @@
+{
+  "configById": {
+    "3D!drone1_lidar": {
+      "cameraState": {
+        "perspective": true,
+        "distance": 35,
+        "phi": 65,
+        "thetaOffset": 45,
+        "targetOffset": [0, 0, 0],
+        "target": [0, 0, 0],
+        "targetOrientation": [0, 0, 0, 1],
+        "fovy": 75,
+        "near": 0.01,
+        "far": 5000
+      },
+      "scene": {
+        "cameraMode": "perspective",
+        "followMode": "follow",
+        "followTf": "/Drone1/base_link",
+        "targetFrame": "/Drone1/base_link",
+        "enableStats": false,
+        "backgroundColor": "#1a1a2e",
+        "labelSize": 0.08
+      },
+      "transforms": {
+        "frame:/Drone1/base_link": { 
+          "visible": true,
+          "axisScale": 2.0,
+          "labelSize": 0.1
+        },
+        "frame:/Drone1/lidar/base_link": { 
+          "visible": true,
+          "axisScale": 1.0
+        },
+        "frame:/world": { 
+          "visible": true,
+          "axisScale": 5.0,
+          "labelSize": 0.15
+        }
+      },
+      "topics": {
+        "/Drone1/lidar_points": {
+          "visible": true,
+          "pointSize": 4,
+          "pointShape": "circle",
+          "decayTime": 5,
+          "colorMode": "gradient",
+          "gradient": ["#ff0080", "#00ffff"],
+          "colorField": "z",
+          "flatColor": "#ffffff",
+          "explicitAlpha": 0.85,
+          "minValue": -5,
+          "maxValue": 15
+        },
+        "/Drone1/odom": {
+          "visible": true,
+          "type": "nav_msgs/Odometry",
+          "poseColor": "#00ff88",
+          "poseStyle": "arrow",
+          "axisScale": 1.5,
+          "shaftLength": 1.5,
+          "shaftWidth": 0.3,
+          "headLength": 0.5,
+          "headWidth": 0.6
+        },
+        "/Drone1/kiss/odometry": {
+          "visible": true,
+          "type": "nav_msgs/Odometry",
+          "pathColor": "#4488ff",
+          "pathStyle": "line",
+          "pathGradient": ["#4488ff", "#ff4488"],
+          "pathDecayTime": 60,
+          "poseColor": "#4488ff",
+          "poseStyle": "arrow",
+          "axisScale": 1.0,
+          "shaftLength": 1.0,
+          "shaftWidth": 0.2,
+          "headLength": 0.3,
+          "headWidth": 0.4
+        },
+        "/lidar_points": {
+          "visible": false
+        }
+      },
+      "layers": {
+        "grid": {
+          "layerId": "foxglove.Grid",
+          "visible": true,
+          "frameId": "world",
+          "position": [0, 0, 0],
+          "rotation": [0, 0, 0],
+          "order": 1,
+          "size": 50,
+          "divisions": 50,
+          "color": "#4a4a6a",
+          "lineWidth": 1
+        }
+      },
+      "publish": {
+        "type": "point",
+        "poseTopic": "/move_base_simple/goal",
+        "pointTopic": "/clicked_point",
+        "poseEstimateTopic": "/initialpose",
+        "poseEstimateXDeviation": 0.5,
+        "poseEstimateYDeviation": 0.5,
+        "poseEstimateThetaDeviation": 0.26179939
+      }
+    },
+    "3D!drone2_lidar": {
+      "cameraState": {
+        "perspective": true,
+        "distance": 35,
+        "phi": 65,
+        "thetaOffset": -45,
+        "targetOffset": [0, 0, 0],
+        "target": [0, 0, 0],
+        "targetOrientation": [0, 0, 0, 1],
+        "fovy": 75,
+        "near": 0.01,
+        "far": 5000
+      },
+      "scene": {
+        "cameraMode": "perspective",
+        "followMode": "follow",
+        "followTf": "/Drone2/base_link",
+        "targetFrame": "/Drone2/base_link",
+        "enableStats": false,
+        "backgroundColor": "#1a1a2e",
+        "labelSize": 0.08
+      },
+      "transforms": {
+        "frame:/Drone2/base_link": { 
+          "visible": true,
+          "axisScale": 2.0,
+          "labelSize": 0.1
+        },
+        "frame:/Drone2/lidar/base_link": { 
+          "visible": true,
+          "axisScale": 1.0
+        },
+        "frame:/world": { 
+          "visible": true,
+          "axisScale": 5.0,
+          "labelSize": 0.15
+        }
+      },
+      "topics": {
+        "/Drone2/lidar_points": {
+          "visible": true,
+          "pointSize": 4,
+          "pointShape": "circle",
+          "decayTime": 5,
+          "colorMode": "gradient",
+          "gradient": ["#ff0080", "#00ffff"],
+          "colorField": "z",
+          "flatColor": "#ffffff",
+          "explicitAlpha": 0.85,
+          "minValue": -5,
+          "maxValue": 15
+        },
+        "/Drone2/odom": {
+          "visible": true,
+          "type": "nav_msgs/Odometry",
+          "poseColor": "#ff8800",
+          "poseStyle": "arrow",
+          "axisScale": 1.5,
+          "shaftLength": 1.5,
+          "shaftWidth": 0.3,
+          "headLength": 0.5,
+          "headWidth": 0.6
+        },
+        "/Drone2/kiss/odometry": {
+          "visible": true,
+          "type": "nav_msgs/Odometry",
+          "pathColor": "#ff44aa",
+          "pathStyle": "line",
+          "pathGradient": ["#ff44aa", "#44aaff"],
+          "pathDecayTime": 60,
+          "poseColor": "#ff44aa",
+          "poseStyle": "arrow",
+          "axisScale": 1.0,
+          "shaftLength": 1.0,
+          "shaftWidth": 0.2,
+          "headLength": 0.3,
+          "headWidth": 0.4
+        },
+        "/lidar_points": {
+          "visible": false
+        }
+      },
+      "layers": {
+        "grid": {
+          "layerId": "foxglove.Grid",
+          "visible": true,
+          "frameId": "world",
+          "position": [0, 0, 0],
+          "rotation": [0, 0, 0],
+          "order": 1,
+          "size": 50,
+          "divisions": 50,
+          "color": "#4a4a6a",
+          "lineWidth": 1
+        }
+      },
+      "publish": {
+        "type": "point",
+        "poseTopic": "/move_base_simple/goal",
+        "pointTopic": "/clicked_point",
+        "poseEstimateTopic": "/initialpose",
+        "poseEstimateXDeviation": 0.5,
+        "poseEstimateYDeviation": 0.5,
+        "poseEstimateThetaDeviation": 0.26179939
+      }
+    },
+    "Image!drone1_yolo": {
+      "cameraTopic": "/Drone1/detections/image",
+      "enabledMarkerTopics": [],
+      "mode": "fit",
+      "pan": { "x": 0, "y": 0 },
+      "rotation": 0,
+      "synchronize": false,
+      "transformMarkers": false,
+      "zoom": 1
+    },
+    "Image!drone2_yolo": {
+      "cameraTopic": "/Drone2/detections/image",
+      "enabledMarkerTopics": [],
+      "mode": "fit",
+      "pan": { "x": 0, "y": 0 },
+      "rotation": 0,
+      "synchronize": false,
+      "transformMarkers": false,
+      "zoom": 1
+    },
+    "Teleop!drone1_ardupilot": {
+      "topic": "/Drone1/mavros/setpoint_velocity/cmd_vel_unstamped",
+      "publishRate": 20,
+      "upButton": { "field": "linear-x", "value": 0.8 },
+      "downButton": { "field": "linear-x", "value": -0.8 },
+      "leftButton": { "field": "angular-z", "value": 0.5 },
+      "rightButton": { "field": "angular-z", "value": -0.5 }
+    },
+    "Teleop!drone1_px4": {
+      "topic": "/Drone1/setpoint_velocity/cmd_vel_unstamped",
+      "publishRate": 20,
+      "upButton": { "field": "linear-x", "value": 0.8 },
+      "downButton": { "field": "linear-x", "value": -0.8 },
+      "leftButton": { "field": "angular-z", "value": 0.5 },
+      "rightButton": { "field": "angular-z", "value": -0.5 }
+    },
+    "Teleop!drone2_ardupilot": {
+      "topic": "/Drone2/mavros/setpoint_velocity/cmd_vel_unstamped",
+      "publishRate": 20,
+      "upButton": { "field": "linear-x", "value": 0.8 },
+      "downButton": { "field": "linear-x", "value": -0.8 },
+      "leftButton": { "field": "angular-z", "value": 0.5 },
+      "rightButton": { "field": "angular-z", "value": -0.5 }
+    },
+    "Teleop!drone2_px4": {
+      "topic": "/Drone2/setpoint_velocity/cmd_vel_unstamped",
+      "publishRate": 20,
+      "upButton": { "field": "linear-x", "value": 0.8 },
+      "downButton": { "field": "linear-x", "value": -0.8 },
+      "leftButton": { "field": "angular-z", "value": 0.5 },
+      "rightButton": { "field": "angular-z", "value": -0.5 }
+    }
+  },
+  "globalVariables": {},
+  "userNodes": {},
+  "playbackConfig": {
+    "speed": 1
+  },
+  "layout": {
+    "direction": "column",
+    "splitPercentage": 55,
+    "first": {
+      "direction": "row",
+      "splitPercentage": 50,
+      "first": "3D!drone1_lidar",
+      "second": "3D!drone2_lidar"
+    },
+    "second": {
+      "direction": "row",
+      "splitPercentage": 50,
+      "first": {
+        "direction": "column",
+        "splitPercentage": 50,
+        "first": "Image!drone1_yolo",
+        "second": "Image!drone2_yolo"
+      },
+      "second": {
+        "direction": "column",
+        "splitPercentage": 50,
+        "first": "Teleop!drone1_px4",
+        "second": "Teleop!drone2_px4"
+      }
+    }
+  }
+}
