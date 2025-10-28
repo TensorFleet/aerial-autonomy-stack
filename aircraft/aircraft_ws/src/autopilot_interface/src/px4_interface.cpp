@@ -33,7 +33,7 @@ PX4Interface::PX4Interface() : Node("px4_interface"),
     command_pub_ = this->create_publisher<VehicleCommand>("fmu/in/vehicle_command", qos_profile_pub);
 
     // Offboard flag publisher
-    offboard_flag_pub_ = this->create_publisher<autopilot_interface_msgs::msg::OffboardFlag>("/offboard_flag", qos_profile_pub);
+    offboard_flag_pub_ = this->create_publisher<autopilot_interface_msgs::msg::OffboardFlag>("offboard_flag", qos_profile_pub);
 
     // Create callback groups (Reentrant or MutuallyExclusive)
     callback_group_timer_ = this->create_callback_group(rclcpp::CallbackGroupType::Reentrant); // Timed callbacks in parallel
@@ -268,6 +268,8 @@ void PX4Interface::offboard_flag_callback()
         msg.offboard_flag = is_vtol_ ? 2 : 1;
     } else if (aircraft_fsm_state_ == PX4InterfaceState::OFFBOARD_RATES) {
         msg.offboard_flag = is_vtol_ ? 4 : 3;
+    } else if (aircraft_fsm_state_ == PX4InterfaceState::OFFBOARD_VELOCITY) {
+        msg.offboard_flag = 7; // Teleop velocity commands (Lichtblick)
     } else if (aircraft_fsm_state_ == PX4InterfaceState::OFFBOARD_TRAJECTORY) {
         msg.offboard_flag = is_vtol_ ? 6 : 5;
     } else {
@@ -522,6 +524,10 @@ void PX4Interface::offboard_handle_accepted(const std::shared_ptr<rclcpp_action:
                 aircraft_fsm_state_ = PX4InterfaceState::OFFBOARD_RATES;
                 feedback->message = "Offboarding with RATES setpoints";
             }
+            else if (offboard_setpoint_type == autopilot_interface_msgs::action::Offboard::Goal::VELOCITY) {
+                aircraft_fsm_state_ = PX4InterfaceState::OFFBOARD_VELOCITY;
+                feedback->message = "Offboarding with VELOCITY setpoints";
+            }
             else if (offboard_setpoint_type == autopilot_interface_msgs::action::Offboard::Goal::TRAJECTORY) {
                 aircraft_fsm_state_ = PX4InterfaceState::OFFBOARD_TRAJECTORY;
                 feedback->message = "Offboarding with TRAJECTORY setpoints";
@@ -529,7 +535,7 @@ void PX4Interface::offboard_handle_accepted(const std::shared_ptr<rclcpp_action:
             else {
                 result->success = false;
                 goal_handle->canceled(result);
-                RCLCPP_ERROR(this->get_logger(), "Offboard type is not supported by PX4Interface (only ATTITUDE, RATES and TRAJECTORY)");
+                RCLCPP_ERROR(this->get_logger(), "Offboard type is not supported by PX4Interface (only ATTITUDE, RATES, VELOCITY and TRAJECTORY)");
                 return;
             }
             goal_handle->publish_feedback(feedback);
@@ -924,6 +930,7 @@ std::string PX4Interface::fsm_state_to_string(PX4InterfaceState state)
         case PX4InterfaceState::MC_LANDING: return "MC_LANDING";
         case PX4InterfaceState::OFFBOARD_ATTITUDE: return "OFFBOARD_ATTITUDE";
         case PX4InterfaceState::OFFBOARD_RATES: return "OFFBOARD_RATES";
+        case PX4InterfaceState::OFFBOARD_VELOCITY: return "OFFBOARD_VELOCITY";
         case PX4InterfaceState::OFFBOARD_TRAJECTORY: return "OFFBOARD_TRAJECTORY";
         default: return "UNKNOWN";
     }

@@ -16,11 +16,15 @@ find_package(geographic_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 
 # Add the CMake module path
-set(CMAKE_MODULE_PATH "/usr/share/cmake/geographiclib" ${CMAKE_MODULE_PATH})
+if(NOT DEFINED GEOGRAPHICLIB_CMAKE_DIR)
+  set(GEOGRAPHICLIB_CMAKE_DIR "/usr/share/cmake/geographiclib")
+endif()
+set(CMAKE_MODULE_PATH "${GEOGRAPHICLIB_CMAKE_DIR}" ${CMAKE_MODULE_PATH})
 find_package(GeographicLib REQUIRED)
 
 add_executable(px4_interface src/px4_interface.cpp)
-target_link_libraries(px4_interface Geographic)
+target_link_libraries(px4_interface ${GeographicLib_LIBRARIES})
+target_include_directories(px4_interface PRIVATE ${GeographicLib_INCLUDE_DIRS})
 ament_target_dependencies(px4_interface 
                           rclcpp
                           rclcpp_action
@@ -31,7 +35,8 @@ ament_target_dependencies(px4_interface
                           )
 
 add_executable(ardupilot_interface src/ardupilot_interface.cpp)
-target_link_libraries(ardupilot_interface Geographic)
+target_link_libraries(ardupilot_interface ${GeographicLib_LIBRARIES})
+target_include_directories(ardupilot_interface PRIVATE ${GeographicLib_INCLUDE_DIRS})
 ament_target_dependencies(ardupilot_interface
                           rclcpp
                           rclcpp_action

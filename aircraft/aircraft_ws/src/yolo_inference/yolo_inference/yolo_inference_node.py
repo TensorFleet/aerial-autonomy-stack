@@ -55,6 +55,22 @@ class YoloInferenceNode(Node):
         self.headless = headless
         self.architecture = platform.machine()
         
+        # Get drone ID from namespace to determine port
+        namespace = self.get_namespace()
+        if namespace and namespace != '/':
+            # Extract drone ID from namespace like '/Drone1' -> 1
+            try:
+                self.drone_id = int(namespace.split('Drone')[-1])
+            except (ValueError, IndexError):
+                self.drone_id = 1
+                self.get_logger().warn(f"Could not parse drone ID from namespace '{namespace}', defaulting to 1")
+        else:
+            self.drone_id = 1
+            self.get_logger().warn("No namespace set, defaulting to drone_id=1")
+        
+        self.gstreamer_port = 5600 + self.drone_id - 1
+        self.get_logger().info(f"Drone {self.drone_id} using GStreamer port {self.gstreamer_port}")
+        
         # Load classes
         names_file = "coco.json"
         with open(names_file, "r") as f:
@@ -90,15 +106,16 @@ class YoloInferenceNode(Node):
         
         # Create publishers
         self.detection_publisher = self.create_publisher(Detection2DArray, 'detections', 10)
-        # self.image_publisher = self.create_publisher(Image, 'detections_image', 10)
+        self.image_publisher = self.create_publisher(Image, 'detections/image', 10)
         self.bridge = CvBridge()
         
-        self.get_logger().info("YOLO inference started.")
+        mode = "headless" if self.headless else "interactive"
+        self.get_logger().info(f"YOLO inference started ({mode}); annotated frames available on /detections/image.")
 
     def run_inference_loop(self):
         # Acquire video stream
         gst_pipeline_string = (
-            "udpsrc port=5600 ! "
+            f"udpsrc port={self.gstreamer_port} ! "
             "application/x-rtp, media=(string)video, encoding-name=(string)H264 ! "
             "rtph264depay ! "
             "avdec_h264 threads=4 ! " # Use CPU decoder, threads=0 for autodetection
@@ -123,13 +140,6 @@ class YoloInferenceNode(Node):
             # TODO: open CSI or RTSP camera feed instead, use hardware acceleration
         assert cap.isOpened(), "Failed to open video stream"
 
-        if not self.headless:
-            drone_id = os.getenv('DRONE_ID', '0')
-            self.WINDOW_NAME = f"YOLOv8 (Aircraft {drone_id})"
-            cv2.namedWindow(self.WINDOW_NAME, cv2.WINDOW_NORMAL)
-            cv2.moveWindow(self.WINDOW_NAME, 800+(int(drone_id)-1)*25, 5+(int(drone_id)-1)*200)
-            # cv2.resizeWindow(self.WINDOW_NAME, 400, 200)
-
         # Start the video capture thread
         is_running = threading.Event()
         is_running.set()
@@ -150,6 +160,7 @@ class YoloInferenceNode(Node):
             
             # Inference
             boxes, confidences, class_ids = self.run_yolo(frame)
+            stamp = self.get_clock().now().to_msg()
 
             inference_count += 1
             if inference_count % 120 == 0:
@@ -161,22 +172,16 @@ class YoloInferenceNode(Node):
                 inference_count = 0
                 start_time = time.time()
 
-            # Publish detections
-            self.publish_detections(frame, boxes, confidences, class_ids)
-
-            # Visualize
-            if not self.headless:
-                self.visualize(frame, boxes, confidences, class_ids)
-                if cv2.waitKey(1) & 0xFF == ord('q'):
-                    break
+            # Publish detections and annotated image for visualization
+            self.publish_detections(stamp, boxes, confidences, class_ids)
+            annotated_frame = self.annotate_frame(frame, boxes, confidences, class_ids)
+            self.publish_image(stamp, annotated_frame)
 
         # Cleanup
         is_running.clear()
         thread.join()
         
         cap.release()
-        if not self.headless:
-            cv2.destroyAllWindows()
 
     def run_yolo(self, frame):
         h0, w0 = frame.shape[:2]
@@ -214,9 +219,9 @@ class YoloInferenceNode(Node):
         final_boxes[:, [1, 3]] *= scale_h
         return final_boxes, final_confidences, final_class_ids
 
-    def publish_detections(self, frame, boxes, confidences, class_ids):
+    def publish_detections(self, stamp, boxes, confidences, class_ids):
         detection_array_msg = Detection2DArray()
-        detection_array_msg.header.stamp = self.get_clock().now().to_msg()
+        detection_array_msg.header.stamp = stamp
         detection_array_msg.header.frame_id = "camera_frame"
 
         for i in range(len(boxes)):
@@ -240,20 +245,32 @@ class YoloInferenceNode(Node):
             detection_array_msg.detections.append(detection)
 
         self.detection_publisher.publish(detection_array_msg)
-        
-        # if not self.headless:
-        #     self.image_publisher.publish(self.bridge.cv2_to_imgmsg(frame, "bgr8"))
 
-    def visualize(self, frame, boxes, confidences, class_ids):
+    def annotate_frame(self, frame, boxes, confidences, class_ids):
+        annotated = frame.copy()
         for i in range(len(boxes)):
             x1, y1, x2, y2 = boxes[i].astype(int)
             conf = confidences[i]
             class_id = class_ids[i]
             class_name = self.classes[class_id]
             color = tuple(self.colors[class_id, [2, 1, 0]].tolist())
-            cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
-            cv2.putText(frame, f"{class_name} {conf:.2f}", (x1, y1 - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 1)
-        cv2.imshow(self.WINDOW_NAME, frame)
+            cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 2)
+            cv2.putText(
+                annotated,
+                f"{class_name} {conf:.2f}",
+                (x1, max(y1 - 5, 0)),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.6,
+                color,
+                1,
+            )
+        return annotated
+
+    def publish_image(self, stamp, frame):
+        image_msg = self.bridge.cv2_to_imgmsg(frame, "bgr8")
+        image_msg.header.stamp = stamp
+        image_msg.header.frame_id = "camera_frame"
+        self.image_publisher.publish(image_msg)
 
 def main(args=None):
     parser = argparse.ArgumentParser(description="YOLOv8 ROS2 Inference Node.")

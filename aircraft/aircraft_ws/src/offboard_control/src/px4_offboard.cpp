@@ -8,7 +8,8 @@ PX4Offboard::PX4Offboard() : Node("px4_offboard"),
     x_(NAN), y_(NAN), z_(NAN), heading_(NAN), vx_(NAN), vy_(NAN), vz_(NAN), ref_lat_(NAN), ref_lon_(NAN), ref_alt_(NAN),
     pose_frame_(-1), velocity_frame_(-1), true_airspeed_m_s_(NAN),
     ground_tracks_(nullptr), yolo_detections_(nullptr),
-    traj_ref_east(NAN), traj_ref_north(NAN), traj_ref_up(NAN)
+    traj_ref_east(NAN), traj_ref_north(NAN), traj_ref_up(NAN),
+    has_teleop_cmd_vel_(false)
 {
     RCLCPP_INFO(this->get_logger(), "PX4 offboard referencing!");
     RCLCPP_INFO(this->get_logger(), "namespace: %s", this->get_namespace());
@@ -74,7 +75,7 @@ PX4Offboard::PX4Offboard() : Node("px4_offboard"),
 
     // Offboard flag subscriber
     offboard_flag_sub_ = this->create_subscription<autopilot_interface_msgs::msg::OffboardFlag>(
-        "/offboard_flag", qos_profile_sub, // 10Hz
+        "offboard_flag", qos_profile_sub, // 10Hz
         std::bind(&PX4Offboard::offboard_flag_callaback, this, std::placeholders::_1), subscriber_options);
 
     // Perception subscribers
@@ -87,6 +88,16 @@ PX4Offboard::PX4Offboard() : Node("px4_offboard"),
     kiss_odometry_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
         "/kiss/odometry", qos_profile_sub, // 10Hz
         std::bind(&PX4Offboard::kiss_odometry_callback, this, std::placeholders::_1), subscriber_options);
+    
+    // Teleop subscriber
+    cmd_vel_unstamped_sub_ = this->create_subscription<geometry_msgs::msg::Twist>(
+        "setpoint_velocity/cmd_vel_unstamped", qos_profile_sub, // Variable rate from Lichtblick
+        std::bind(&PX4Offboard::cmd_vel_unstamped_callback, this, std::placeholders::_1), subscriber_options);
+    
+    // Initialize teleop variables
+    last_teleop_cmd_vel_ = geometry_msgs::msg::Twist();
+    has_teleop_cmd_vel_ = false;
+    last_teleop_cmd_time_ = this->get_clock()->now();
 }
 
 // Callbacks for subscribers (reentrant group)
@@ -209,6 +220,14 @@ void PX4Offboard::kiss_odometry_callback(const nav_msgs::msg::Odometry::SharedPt
     kiss_q_[3] = msg->pose.pose.orientation.z;
 }
 
+void PX4Offboard::cmd_vel_unstamped_callback(const geometry_msgs::msg::Twist::SharedPtr msg)
+{
+    std::unique_lock<std::shared_mutex> lock(node_data_mutex_); // Use unique_lock for data writes
+    last_teleop_cmd_vel_ = *msg;
+    has_teleop_cmd_vel_ = true;
+    last_teleop_cmd_time_ = this->get_clock()->now();
+}
+
 // Callbacks for timers (reentrant group)
 void PX4Offboard::px4_interface_printout_callback()
 {
@@ -322,11 +341,17 @@ void PX4Offboard::offboard_loop_callback()
         TrajectorySetpoint trajectory_ref; // https://github.com/PX4/px4_msgs/blob/release/1.16/msg/TrajectorySetpoint.msg
         trajectory_ref.timestamp = current_time_us;
         offboard_mode.position = true;
-        trajectory_ref.position = {0.0, 0.0, -50.0};
-        trajectory_ref.yaw = -3.14; // [-PI:PI]
+        trajectory_ref.position = {0.0f, 0.0f, -50.0f};
+        trajectory_ref.yaw = -3.14f; // [-PI:PI]
         if (!std::isnan(traj_ref_east) && !std::isnan(traj_ref_north) && !std::isnan(traj_ref_up)) {
-            trajectory_ref.position = {traj_ref_north, traj_ref_east, -traj_ref_up};
-            trajectory_ref.yaw = std::atan2((traj_ref_east - y_), (traj_ref_north - x_)); // [-PI:PI]
+            trajectory_ref.position = {
+                static_cast<float>(traj_ref_north),
+                static_cast<float>(traj_ref_east),
+                static_cast<float>(-traj_ref_up)
+            };
+            trajectory_ref.yaw = static_cast<float>(
+                std::atan2((traj_ref_east - y_), (traj_ref_north - x_))
+            ); // [-PI:PI]
         }
         // offboard_mode.acceleration = true;
         // trajectory_ref.acceleration = {0.0, 0.0, -5.0};
@@ -335,7 +360,49 @@ void PX4Offboard::offboard_loop_callback()
         TrajectorySetpoint trajectory_ref; // https://github.com/PX4/px4_msgs/blob/release/1.16/msg/TrajectorySetpoint.msg
         trajectory_ref.timestamp = current_time_us;
         offboard_mode.velocity = true;
-        trajectory_ref.velocity = {20.0, 0.0, 0.0};
+        trajectory_ref.velocity = {20.0f, 0.0f, 0.0f};
+        trajectory_ref_pub_->publish(trajectory_ref);
+    } else if (offboard_flag_ == 7) { // Teleop velocity reference from Lichtblick
+        TrajectorySetpoint trajectory_ref; // https://github.com/PX4/px4_msgs/blob/release/1.16/msg/TrajectorySetpoint.msg
+        trajectory_ref.timestamp = current_time_us;
+        offboard_mode.velocity = true;
+        const float nan = std::numeric_limits<float>::quiet_NaN();
+        trajectory_ref.position = {nan, nan, nan};
+        trajectory_ref.acceleration = {nan, nan, nan};
+        trajectory_ref.jerk = {nan, nan, nan};
+        trajectory_ref.yaw = nan;
+        // Check if we have recent teleop commands (within 500ms)
+        auto now = this->get_clock()->now();
+        double time_since_last_cmd = (now - last_teleop_cmd_time_).seconds();
+        if (has_teleop_cmd_vel_ && time_since_last_cmd < 0.5) {
+            // Convert from ROS FLU body frame (x forward, y left, z up) to PX4's NED frame
+            // Twist convention: linear.x is forward, linear.y is left, linear.z is up
+            // angular.z is yaw rate (positive = left/CCW turn)
+            // PX4 TrajectorySetpoint velocity in NED: [North, East, Down]
+            // For body-frame control, we need to rotate by current heading
+            double heading_rad = heading_;
+            if (!std::isfinite(heading_rad)) {
+                heading_rad = 0.0;
+                RCLCPP_WARN_THROTTLE(
+                    get_logger(), *this->get_clock(), 2000,
+                    "Heading not available; assuming 0 rad for teleop transform.");
+            }
+            const double cos_h = std::cos(heading_rad);
+            const double sin_h = std::sin(heading_rad);
+            // Rotate body velocities to NED frame
+            const float vx_body = static_cast<float>(last_teleop_cmd_vel_.linear.x);  // Forward
+            const float vy_body_right = static_cast<float>(-last_teleop_cmd_vel_.linear.y);  // ROS uses left-positive
+            const float vz_body_down = static_cast<float>(-last_teleop_cmd_vel_.linear.z);   // ROS uses up-positive
+            const float vel_north = static_cast<float>(vx_body * cos_h - vy_body_right * sin_h);
+            const float vel_east = static_cast<float>(vx_body * sin_h + vy_body_right * cos_h);
+            const float vel_down = vz_body_down;
+            trajectory_ref.velocity = {vel_north, vel_east, vel_down};
+            trajectory_ref.yawspeed = static_cast<float>(last_teleop_cmd_vel_.angular.z); // Yaw rate (CCW positive)
+        } else {
+            // No recent commands - hover in place
+            trajectory_ref.velocity = {0.0f, 0.0f, 0.0f};
+            trajectory_ref.yawspeed = 0.0f;
+        }
         trajectory_ref_pub_->publish(trajectory_ref);
     } else {
         RCLCPP_WARN(get_logger(), "Unexpected offboard_flag value: %d", offboard_flag_.load());

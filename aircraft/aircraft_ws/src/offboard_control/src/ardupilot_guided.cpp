@@ -29,8 +29,8 @@ ArdupilotGuided::ArdupilotGuided() : Node("ardupilot_guided"),
     // MAVROS Publishers
     rclcpp::QoS qos_profile_pub(10);  // Depth of 10
     qos_profile_pub.durability(rclcpp::DurabilityPolicy::TransientLocal);  // Or rclcpp::DurabilityPolicy::Volatile
-    setpoint_accel_pub_= this->create_publisher<Vector3Stamped>("/mavros/setpoint_accel/accel", qos_profile_pub);
-    setpoint_vel_pub_= this->create_publisher<TwistStamped>("/mavros/setpoint_velocity/cmd_vel", qos_profile_pub);
+    setpoint_accel_pub_= this->create_publisher<Vector3Stamped>("mavros/setpoint_accel/accel", qos_profile_pub);
+    setpoint_vel_pub_= this->create_publisher<TwistStamped>("mavros/setpoint_velocity/cmd_vel", qos_profile_pub);
 
     // Create callback groups (Reentrant or MutuallyExclusive)
     callback_group_timer_ = this->create_callback_group(rclcpp::CallbackGroupType::Reentrant); // Timed callbacks in parallel
@@ -57,21 +57,21 @@ ArdupilotGuided::ArdupilotGuided() : Node("ardupilot_guided"),
 
     // MAVROS subscribers
     mavros_global_position_global_sub_= this->create_subscription<NavSatFix>(
-        "/mavros/global_position/global", qos_profile_sub, // 4Hz
+        "mavros/global_position/global", qos_profile_sub, // 4Hz
         std::bind(&ArdupilotGuided::global_position_global_sub_callback, this, std::placeholders::_1), subscriber_options);
     mavros_local_position_odom_sub_= this->create_subscription<Odometry>(
-        "/mavros/local_position/odom", qos_profile_sub, // 4Hz
+        "mavros/local_position/odom", qos_profile_sub, // 4Hz
         std::bind(&ArdupilotGuided::local_position_odom_callback, this, std::placeholders::_1), subscriber_options);
     mavros_global_position_local_sub_ = this->create_subscription<Odometry>(
-        "/mavros/global_position/local", qos_profile_sub, // 4Hz
+        "mavros/global_position/local", qos_profile_sub, // 4Hz
         std::bind(&ArdupilotGuided::global_position_local_callback, this, std::placeholders::_1), subscriber_options);
     mavros_vfr_hud_sub_ = this->create_subscription<VfrHud>(
-        "/mavros/vfr_hud", qos_profile_sub, // 4Hz
+        "mavros/vfr_hud", qos_profile_sub, // 4Hz
         std::bind(&ArdupilotGuided::vfr_hud_callback, this, std::placeholders::_1), subscriber_options);
 
     // Offboard flag subscriber
     offboard_flag_sub_ = this->create_subscription<autopilot_interface_msgs::msg::OffboardFlag>(
-        "/offboard_flag", qos_profile_sub, // 10Hz
+        "offboard_flag", qos_profile_sub, // 10Hz
         std::bind(&ArdupilotGuided::offboard_flag_callaback, this, std::placeholders::_1), subscriber_options);
 
     // Perception subscribers

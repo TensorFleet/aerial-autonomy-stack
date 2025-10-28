@@ -83,6 +83,7 @@ enum class PX4InterfaceState {
     MC_LANDING,
     OFFBOARD_ATTITUDE,
     OFFBOARD_RATES,
+    OFFBOARD_VELOCITY,
     OFFBOARD_TRAJECTORY
 };
 
