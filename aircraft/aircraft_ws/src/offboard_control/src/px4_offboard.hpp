@@ -10,6 +10,7 @@
 #include <atomic>
 #include <array>
 #include <algorithm>
+#include <limits>
 #include <string>
 #include <sstream>
 #include <iomanip>
@@ -107,7 +108,8 @@ private:
     double traj_ref_east, traj_ref_north, traj_ref_up;
     
     // Teleop variables
-    geometry_msgs::msg::Twist::SharedPtr teleop_cmd_vel_;
+    geometry_msgs::msg::Twist last_teleop_cmd_vel_;
+    bool has_teleop_cmd_vel_;
     rclcpp::Time last_teleop_cmd_time_;
 
     // PX4 publishers

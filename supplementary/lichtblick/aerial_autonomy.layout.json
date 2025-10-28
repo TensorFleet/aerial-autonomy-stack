@@ -240,11 +240,27 @@
       "leftButton": { "field": "angular-z", "value": 0.5 },
       "rightButton": { "field": "angular-z", "value": -0.5 }
     },
+    "Teleop!drone1_ardupilot_altitude": {
+      "topic": "/Drone1/mavros/setpoint_velocity/cmd_vel_unstamped",
+      "publishRate": 20,
+      "upButton": { "field": "linear-z", "value": 0.8 },
+      "downButton": { "field": "linear-z", "value": -0.8 },
+      "leftButton": { "field": "angular-z", "value": 0.5 },
+      "rightButton": { "field": "angular-z", "value": -0.5 }
+    },
     "Teleop!drone1_px4": {
       "topic": "/Drone1/setpoint_velocity/cmd_vel_unstamped",
       "publishRate": 20,
       "upButton": { "field": "linear-x", "value": 0.8 },
       "downButton": { "field": "linear-x", "value": -0.8 },
+      "leftButton": { "field": "angular-z", "value": 0.5 },
+      "rightButton": { "field": "angular-z", "value": -0.5 }
+    },
+    "Teleop!drone1_px4_altitude": {
+      "topic": "/Drone1/setpoint_velocity/cmd_vel_unstamped",
+      "publishRate": 20,
+      "upButton": { "field": "linear-z", "value": 0.8 },
+      "downButton": { "field": "linear-z", "value": -0.8 },
       "leftButton": { "field": "angular-z", "value": 0.5 },
       "rightButton": { "field": "angular-z", "value": -0.5 }
     },
@@ -256,11 +272,27 @@
       "leftButton": { "field": "angular-z", "value": 0.5 },
       "rightButton": { "field": "angular-z", "value": -0.5 }
     },
+    "Teleop!drone2_ardupilot_altitude": {
+      "topic": "/Drone2/mavros/setpoint_velocity/cmd_vel_unstamped",
+      "publishRate": 20,
+      "upButton": { "field": "linear-z", "value": 0.8 },
+      "downButton": { "field": "linear-z", "value": -0.8 },
+      "leftButton": { "field": "angular-z", "value": 0.5 },
+      "rightButton": { "field": "angular-z", "value": -0.5 }
+    },
     "Teleop!drone2_px4": {
       "topic": "/Drone2/setpoint_velocity/cmd_vel_unstamped",
       "publishRate": 20,
       "upButton": { "field": "linear-x", "value": 0.8 },
       "downButton": { "field": "linear-x", "value": -0.8 },
+      "leftButton": { "field": "angular-z", "value": 0.5 },
+      "rightButton": { "field": "angular-z", "value": -0.5 }
+    },
+    "Teleop!drone2_px4_altitude": {
+      "topic": "/Drone2/setpoint_velocity/cmd_vel_unstamped",
+      "publishRate": 20,
+      "upButton": { "field": "linear-z", "value": 0.8 },
+      "downButton": { "field": "linear-z", "value": -0.8 },
       "leftButton": { "field": "angular-z", "value": 0.5 },
       "rightButton": { "field": "angular-z", "value": -0.5 }
     }

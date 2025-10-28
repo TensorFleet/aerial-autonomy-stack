@@ -1,181 +1,231 @@
-# Teleop Fixes for Lichtblick Integration
+# Lichtblick Teleop Setup Guide
 
-## Summary
+This guide explains how to use the Lichtblick Teleoperation Panel to control drones in this stack.
 
-Fixed teleop functionality in Lichtblick for controlling drones. The issues were:
-1. **ArduPilot**: Topic paths were hardcoded with absolute paths, bypassing ROS2 namespaces
-2. **PX4**: No teleop interface existed at all
-3. **Lichtblick**: Configuration only supported ArduPilot
+## Quick Start
 
-## Changes Made
+**IMPORTANT**: `sim_run.sh` only starts the containers. After it launches, you must manually enable teleop modes.
 
-### 1. Fixed ArduPilot Topic Namespacing
+### Complete Workflow (PX4)
 
-**Problem**: MAVROS topics were using absolute paths (`/mavros/...`) which ignored the drone namespace.
+```bash
+# Terminal 1: Start simulation
+cd ~/aerial-autonomy-stack/scripts
+AUTOPILOT=px4 NUM_QUADS=1 ./sim_run.sh
 
-**Files Modified**:
-- `aircraft/aircraft_ws/src/offboard_control/src/ardupilot_guided.cpp`
-- `aircraft/aircraft_ws/src/autopilot_interface/src/ardupilot_interface.cpp`
+# Wait ~30 seconds for everything to boot up
+# Open Lichtblick at http://localhost:8080
+# Connect to ws://localhost:9090
 
-**Changes**:
-- Changed all MAVROS publisher/subscriber/service topics from absolute paths (`"/mavros/..."`) to relative paths (`"mavros/..."`)
-- Changed `offboard_flag` topic from `"/offboard_flag"` to `"offboard_flag"`
-- This allows topics to properly respect the `/Drone1`, `/Drone2`, etc. namespaces
+# Terminal 2: Takeoff
+ros2 action send_goal /Drone1/takeoff_action autopilot_interface_msgs/action/Takeoff "{takeoff_altitude: 40.0}"
 
-**Result**: 
-- ArduPilot drones now expose `/Drone1/mavros/setpoint_velocity/cmd_vel_unstamped` etc.
-- Teleop commands from Lichtblick properly reach the correct drone
+# Terminal 3: Enable Teleop Mode (OFFBOARD VELOCITY)
+ros2 action send_goal /Drone1/offboard_action autopilot_interface_msgs/action/Offboard "{offboard_setpoint_type: 3, max_duration_sec: 600.0}"
+# Note: offboard_setpoint_type: 3 = VELOCITY mode, max_duration_sec: 600.0 = 10 minutes
 
-### 2. Added PX4 Teleop Support
-
-**Problem**: PX4 doesn't use MAVROS, so there was no `cmd_vel_unstamped` interface.
-
-**Files Modified**:
-- `aircraft/aircraft_ws/src/offboard_control/src/px4_offboard.hpp`
-- `aircraft/aircraft_ws/src/offboard_control/src/px4_offboard.cpp`
-- `aircraft/aircraft_ws/src/autopilot_interface/src/px4_interface.cpp`
-
-**Changes**:
-- Added `geometry_msgs/Twist` subscriber at `setpoint_velocity/cmd_vel_unstamped`
-- Created new offboard mode (flag 7) for teleop velocity control
-- Implemented body-frame to NED-frame velocity transformation
-- Added 500ms timeout - if no commands received, drone hovers in place
-- Fixed `offboard_flag` topic to use relative path
-
-**Result**:
-- PX4 drones now expose `/Drone1/setpoint_velocity/cmd_vel_unstamped` etc.
-- Teleop commands are converted to PX4's `TrajectorySetpoint` messages
-- Properly handles body-frame velocities and yaw rates
-
-### 3. Updated Lichtblick Layout
-
-**File Modified**:
-- `supplementary/lichtblick/aerial_autonomy.layout.json`
-
-**Changes**:
-- Added separate teleop panels for PX4 and ArduPilot
-- PX4 panels: `Teleop!drone1_px4`, `Teleop!drone2_px4` → `/Drone{N}/setpoint_velocity/cmd_vel_unstamped`
-- ArduPilot panels: `Teleop!drone1_ardupilot`, `Teleop!drone2_ardupilot` → `/Drone{N}/mavros/setpoint_velocity/cmd_vel_unstamped`
-- Layout defaults to PX4 panels (since PX4 is the default autopilot)
-
-**Result**:
-- Users can switch between autopilot-specific teleop panels
-- Works out-of-the-box with the default configuration
-
-### 4. Updated Documentation
-
-**File Modified**:
-- `README.md`
-
-**Changes**:
-- Documented both PX4 and ArduPilot teleop functionality
-- Explained frame conventions (body frame for PX4, NED for ArduPilot)
-- Added important note about required modes (offboard flag 7 for PX4, GUIDED for ArduPilot)
-- Clarified that teleop now works for both autopilots
-
-## How to Use
-
-### For PX4:
-1. Start simulation with `AUTOPILOT=px4`
-2. In Lichtblick, use the default `Teleop!drone1_px4` and `Teleop!drone2_px4` panels
-3. **Important**: First put the drone in offboard mode with flag 7:
-   ```bash
-   ros2 action send_goal /Drone1/offboard autopilot_interface_msgs/action/Offboard "{flag: 7}"
-   ```
-4. Use the D-pad in Lichtblick to control the drone
-5. Commands are in body frame: Up/Down = forward/backward, Left/Right = yaw left/right
-
-### For ArduPilot:
-1. Start simulation with `AUTOPILOT=ardupilot`
-2. In Lichtblick, swap the teleop panels to `Teleop!drone1_ardupilot` and `Teleop!drone2_ardupilot`
-3. Put the drone in GUIDED mode
-4. Use the D-pad in Lichtblick to control the drone
-5. Commands are in NED frame: Up/Down = north/south, Left/Right = yaw left/right
-
-## Technical Details
-
-### Topic Structure:
-- **PX4**: `/Drone{N}/setpoint_velocity/cmd_vel_unstamped` → `px4_offboard` node → `TrajectorySetpoint` messages
-- **ArduPilot**: `/Drone{N}/mavros/setpoint_velocity/cmd_vel_unstamped` → MAVROS → MAVLink velocity commands
-
-### Frame Conventions:
-- **Lichtblick Teleop Panel**: `geometry_msgs/Twist`
-  - `linear.x`: forward/backward (m/s)
-  - `linear.y`: left/right (m/s, typically 0)
-  - `linear.z`: up/down (m/s, typically 0)
-  - `angular.z`: yaw rate (rad/s)
-
-- **PX4 Transformation**: Body frame → NED frame
-  - Rotates velocities by current heading
-  - Sends to `/fmu/in/trajectory_setpoint`
-  
-- **ArduPilot**: Uses MAVROS directly
-  - Commands are in LOCAL_NED frame
-  - Sends MAVLink SET_POSITION_TARGET_LOCAL_NED messages
-
-### Safety Features:
-- **PX4**: 500ms timeout - stops if no commands received
-- **Both**: Default velocities are conservative (0.8 m/s, 0.5 rad/s)
-- **Both**: Releasing D-pad stops publishing (vehicle may drift, tap opposite to zero)
-
-## Testing
-
-To test the fixes:
-
-1. **Start a simulation**:
-   ```bash
-   cd ~/git/aerial-autonomy-stack/scripts
-   AUTOPILOT=px4 NUM_QUADS=2 ./sim_run.sh
-   # or
-   AUTOPILOT=ardupilot NUM_QUADS=2 ./sim_run.sh
-   ```
-
-2. **Open Lichtblick**: Navigate to http://localhost:8080
-
-3. **Add connections**:
-   - ws://localhost:9090 (Drone 1)
-   - ws://localhost:9091 (Drone 2)
-
-4. **Import layout**: `supplementary/lichtblick/aerial_autonomy.layout.json`
-
-5. **Test teleop**:
-   - For PX4: Enter offboard mode flag 7 first
-   - For ArduPilot: Enter GUIDED mode
-   - Use the teleop D-pad to move the drone
-
-## Bug Fix (Critical)
-
-### Issue Found
-The initial implementation had a critical bug on line 369 of `px4_offboard.cpp`:
-
-```cpp
-double heading_rad = heading_ * M_PI / 180.0;  // BUG: heading_ is already in radians!
+# NOW you can use the Lichtblick D-pad to control the drone!
 ```
 
-The `heading_` variable from PX4's `VehicleLocalPosition` message is already in radians (range: -π to +π), but the code was incorrectly converting it from degrees to radians. This caused the body-frame to NED-frame rotation to be off by a factor of ~57.3, making the drone move in completely wrong directions.
+### Complete Workflow (ArduPilot)
 
-### Fix Applied
-Removed the incorrect conversion and added a clarifying comment:
+```bash
+# Terminal 1: Start simulation
+cd ~/aerial-autonomy-stack/scripts
+AUTOPILOT=ardupilot NUM_QUADS=1 ./sim_run.sh
 
-```cpp
-// Note: heading_ is already in radians (-PI to +PI)
-double cos_h = std::cos(heading_);
-double sin_h = std::sin(heading_);
+# Wait ~40 seconds for ArduPilot SITL to initialize
+# Open Lichtblick at http://localhost:8080
+# Connect to ws://localhost:9090
+
+# Terminal 2: Takeoff
+ros2 action send_goal /Drone1/takeoff_action autopilot_interface_msgs/action/Takeoff "{takeoff_altitude: 10.0}"
+
+# Terminal 3: Enable GUIDED Mode
+ros2 service call /Drone1/mavros/set_mode mavros_msgs/srv/SetMode "{custom_mode: 'GUIDED'}"
+
+# NOW you can use the Lichtblick D-pad to control the drone!
 ```
 
-This fix is **essential** for PX4 teleop to work correctly.
+## Lichtblick Configuration
 
-## Compatibility
+The layout file `supplementary/lichtblick/aerial_autonomy.layout.json` includes pre-configured teleop panels:
 
-- **YOLO**: ✅ Working (already fixed by other dev)
-- **LiDAR**: ✅ Working (already fixed by other dev)
-- **Teleop PX4**: ✅ Now working (bug fixed)
-- **Teleop ArduPilot**: ✅ Now working
+### PX4 Panels
+- **Standard** (Forward/Yaw): `Teleop!drone1_px4`, `Teleop!drone2_px4`
+  - Topic: `/Drone{N}/setpoint_velocity/cmd_vel_unstamped`
+  - Up/Down = Forward/Backward, Left/Right = Yaw
 
-## Notes
+- **Altitude** (Climb/Yaw): `Teleop!drone1_px4_altitude`, `Teleop!drone2_px4_altitude`
+  - Topic: `/Drone{N}/setpoint_velocity/cmd_vel_unstamped`
+  - Up/Down = Climb/Descend, Left/Right = Yaw
 
-- **Vehicle Compatibility**: Lichtblick teleop works with **all vehicle types** (quad, VTOL, fixed-wing, etc.)
-- For multi-drone fleets, each drone gets its own namespace and teleop panel
-- You can mix PX4 and ArduPilot drones (though typically you'd use one autopilot type)
-- The Lichtblick teleop panel sends `geometry_msgs/Twist` messages in body frame, which are automatically converted to the appropriate frame for each autopilot
+### ArduPilot Panels
+- **Standard** (Forward/Yaw): `Teleop!drone1_ardupilot`, `Teleop!drone2_ardupilot`
+  - Topic: `/Drone{N}/mavros/setpoint_velocity/cmd_vel_unstamped`
+  - Up/Down = Forward/Backward, Left/Right = Yaw
 
+- **Altitude** (Climb/Yaw): `Teleop!drone1_ardupilot_altitude`, `Teleop!drone2_ardupilot_altitude`
+  - Topic: `/Drone{N}/mavros/setpoint_velocity/cmd_vel_unstamped`
+  - Up/Down = Climb/Descend, Left/Right = Yaw
+
+### Switching Between Panels
+
+**Change control mode**:
+1. Right-click the teleop panel
+2. Select "Change panel" 
+3. Choose `Teleop!drone1_px4_altitude` for altitude control
+
+**Switch autopilot**:
+1. Right-click the teleop panel
+2. Select "Change panel"
+3. Choose the appropriate ArduPilot panel if using ArduPilot
+
+## Control Mapping
+
+### Available Teleop Panels
+
+The layout now includes **multiple teleop configurations** for different control schemes:
+
+#### Standard Panels (Forward/Backward + Yaw)
+- `Teleop!drone1_px4` / `Teleop!drone2_px4`
+- `Teleop!drone1_ardupilot` / `Teleop!drone2_ardupilot`
+- **Up Button**: Forward (linear.x = +0.8 m/s)
+- **Down Button**: Backward (linear.x = -0.8 m/s)
+- **Left Button**: Yaw left (angular.z = +0.5 rad/s)
+- **Right Button**: Yaw right (angular.z = -0.5 rad/s)
+
+#### Altitude Panels (Climb/Descend + Yaw)
+- `Teleop!drone1_px4_altitude` / `Teleop!drone2_px4_altitude` (NEW!)
+- `Teleop!drone1_ardupilot_altitude` / `Teleop!drone2_ardupilot_altitude` (NEW!)
+- **Up Button**: Climb (linear.z = +0.8 m/s)
+- **Down Button**: Descend (linear.z = -0.8 m/s)
+- **Left Button**: Yaw left (angular.z = +0.5 rad/s)
+- **Right Button**: Yaw right (angular.z = -0.5 rad/s)
+
+### How to Switch Between Control Modes
+
+**Option 1: Use Different Panels** (Recommended)
+- In Lichtblick, swap between `Teleop!drone1_px4` and `Teleop!drone1_px4_altitude` panels
+- Right-click the panel → "Change panel" → Select the desired teleop configuration
+
+**Option 2: Edit Panel Settings** (Runtime)
+1. Click the **⚙️ (settings icon)** on any Teleop panel
+2. Configure each button to control any axis:
+   - `linear-x`: Forward(+) / Backward(-)
+   - `linear-y`: Left(+) / Right(-)
+   - `linear-z`: Up(+) / Down(-)
+   - `angular-z`: Yaw CCW(+) / Yaw CW(-)
+3. Adjust velocities (default: 0.8 m/s for linear, 0.5 rad/s for angular)
+
+### Available Control Axes
+
+The `geometry_msgs/Twist` message supports:
+- **linear.x**: Forward/backward velocity (body frame)
+- **linear.y**: Left/right velocity (body frame)
+- **linear.z**: Up/down velocity (body frame)
+- **angular.z**: Yaw rate (body frame)
+
+**Note**: Releasing the D-pad stops publishing commands. The drone will attempt to hover but may drift. Tap the opposite direction to stabilize.
+
+## How It Works
+
+### PX4 Implementation
+
+1. `px4_offboard` node subscribes to `setpoint_velocity/cmd_vel_unstamped`
+2. Receives `geometry_msgs/Twist` messages (body frame)
+3. Converts to NED frame using current heading
+4. Publishes `TrajectorySetpoint` to `/fmu/in/trajectory_setpoint`
+5. 500ms timeout: if no commands, drone hovers
+
+### ArduPilot Implementation
+
+1. MAVROS natively handles `mavros/setpoint_velocity/cmd_vel_unstamped`
+2. Receives `geometry_msgs/Twist` messages (body frame)
+3. MAVROS converts to MAVLink `SET_POSITION_TARGET_LOCAL_NED`
+4. ArduPilot processes in GUIDED mode
+
+## Frame Conventions
+
+### Input (Lichtblick → ROS)
+- `geometry_msgs/Twist` in **FLU body frame**:
+  - `linear.x`: forward (+) / backward (-) in m/s
+  - `linear.y`: left (+) / right (-) in m/s (unused)
+  - `linear.z`: up (+) / down (-) in m/s (unused)
+  - `angular.z`: yaw rate, CCW (+) / CW (-) in rad/s
+
+### PX4 Internal
+- Converted to **NED frame** (North-East-Down)
+- Rotated by current heading
+
+### ArduPilot Internal
+- MAVROS handles body-frame → LOCAL_NED conversion
+
+## Troubleshooting
+
+### Drone Not Responding
+
+**PX4**:
+- Check if drone is in OFFBOARD mode: `ros2 topic echo /Drone1/offboard_flag`
+- Verify teleop messages are received: `ros2 topic echo /Drone1/setpoint_velocity/cmd_vel_unstamped`
+- Ensure offboard action is active (max_duration not exceeded)
+
+**ArduPilot**:
+- Check if drone is in GUIDED mode: `ros2 topic echo /Drone1/mavros/state`
+- Verify teleop messages are received: `ros2 topic echo /Drone1/mavros/setpoint_velocity/cmd_vel_unstamped`
+
+### Drone Moves in Wrong Direction
+
+- **PX4**: Check if heading is valid: `ros2 topic echo /Drone1/fmu/out/vehicle_local_position`
+- **Both**: Verify control mapping in Lichtblick panel settings
+
+### Connection Issues
+
+- Verify Rosbridge is running on correct ports (9090, 9091, etc.)
+- Check Lichtblick connection status in bottom right
+- Ensure ROS topics are properly namespaced
+
+## Safety Notes
+
+1. **Always test in simulation first**
+2. **Keep emergency stop ready**: Kill the offboard action or switch modes manually
+3. **Monitor timeouts**: PX4 offboard has max_duration_sec limit
+4. **Start with low velocities**: Default 0.8 m/s is conservative
+5. **Indoor/GPS-denied**: Teleop works but position hold may drift without good localization
+
+## Complete Example Session
+
+```bash
+# Terminal 1: Start simulation with sim_run.sh
+cd ~/aerial-autonomy-stack/scripts
+AUTOPILOT=px4 NUM_QUADS=1 ./sim_run.sh
+
+# Wait ~30 seconds for simulation to boot up
+# sim_run.sh automatically starts:
+#   - Simulation container (Gazebo)
+#   - Aircraft container(s) (PX4/ArduPilot + ROS2 nodes)
+#   - Lichtblick container (http://localhost:8080)
+#   - Rosbridge server (ws://localhost:9090)
+
+# Open browser to http://localhost:8080
+# In Lichtblick:
+#   1. Click "Open connection" → Add "Rosbridge (ROS 1 & 2)" → ws://localhost:9090
+#   2. Import layout: File → Import layout → ~/aerial-autonomy-stack/supplementary/lichtblick/aerial_autonomy.layout.json
+
+# Terminal 2: Takeoff the drone
+ros2 action send_goal /Drone1/takeoff_action autopilot_interface_msgs/action/Takeoff "{takeoff_altitude: 40.0}"
+
+# Wait for takeoff to complete (~10 seconds)
+
+# Terminal 3: Enable teleop mode (CRITICAL STEP!)
+ros2 action send_goal /Drone1/offboard_action autopilot_interface_msgs/action/Offboard "{offboard_setpoint_type: 3, max_duration_sec: 600.0}"
+
+# NOW the D-pad in Lichtblick Teleop panel will work!
+# Use arrow keys to fly the drone
+
+# When done, land:
+# Terminal 4: Cancel offboard action first (Ctrl+C in Terminal 3), then land
+ros2 action send_goal /Drone1/land_action autopilot_interface_msgs/action/Land "{landing_altitude: 60.0}"
+
+# Stop everything: Press any key in Terminal 1 where sim_run.sh is running
+```
